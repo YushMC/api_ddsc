@@ -828,7 +828,7 @@ Flight::route('POST /verify-user', function() {
             "los siguientes códigos de recuperación son de solo un uso, NO LOS COMPARTAS CON NADIE!. 1. {$code1} 2. {$code2} 3. {$code3}",
             "Ir al sitio",
             getenv('URL_SITE')
-            )
+        );
             
             if($mailToSend){
                 Flight::json(["message" => "Cuenta verificada exitosamente. Se han enviado los codigos de recuperación, por favor revisa tu correo electrónico e inicia sesión."]);
@@ -926,7 +926,7 @@ Flight::route('PUT  /verify-user/id/@id_user', function($id_user) {
             "los siguientes códigos de recuperación son de solo un uso, NO LOS COMPARTAS CON NADIE!. 1. {$code1} 2. {$code2} 3. {$code3}",
             "Ir al sitio",
             getenv('URL_SITE')
-            )
+        );
             
             if($mailToSend){
                 Flight::json(["message" => "Cuenta verificada exitosamente. Se han enviado los codigos de recuperación al correo del usuario."]);
@@ -1006,7 +1006,7 @@ Flight::route('PUT  /change-user-email/id/@id_user', function($id_user) {
             "Para acceder a tu cuenta de Doki Doki Spanish Club, es necesario verificar tu cuenta con el siguiente enlace.",
             "Verificar Cuenta",
             "{$site_url}/verificar?email={$email}&code={$codigoVerificacion}"
-            )
+        );
             if($mailToSend){
                 Flight::json(["message" => "Usuario registrado. Ingresa a tu correo para verificar y acceder la cuenta."]);
             }else{
@@ -1236,7 +1236,7 @@ Flight::route('POST /register-user', function() {
             "Para acceder a tu cuenta de Doki Doki Spanish Club, es necesario verificar tu cuenta con el siguiente enlace.",
             "Verificar Cuenta",
             "{$site_url}/verificar?email={$email}&code={$codigoVerificacion}"
-            )
+        );
             if($mailToSend){
                 Flight::json(["message" => "Usuario registrado. Ingresa a tu correo para verificar y acceder la cuenta."]);
             }else{
@@ -1811,7 +1811,7 @@ Flight::route('PUT /change-password', function(){
              "Tu contraseña se cambió correctamente. Si no realizaste este cambio, contacta a soporte por nuestras redes sociales (Discord: Team DDSC Web).",
             "Ir al Sitio",
             getenv('URL_SITE')
-            )
+        );
             if($mailToSend){
                 Flight::json(["message" => "Contraseña actualizada correctamente. La nueva contraseña será necesaria en el siguiente inicio de sesión."]);
             }else{
