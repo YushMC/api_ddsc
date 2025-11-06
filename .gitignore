@@ -1,0 +1,6 @@
+vendor/
+images/
+gui/
+composer.lock
+.htaccess
+api.conf
