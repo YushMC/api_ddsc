@@ -998,7 +998,7 @@ Flight::route('PUT  /change-user-email/id/@id_user', function($id_user) {
         
         $codigoVerificacion = $user['verify_code'];
         $user = $user['user'];
-        $site_url = getenv('URL_SITE')};
+        $site_url = getenv('URL_SITE');
         try{
             $mailToSend = sendEmail("Confirma tu cuenta DDSC, {$user}!",
             $user,
@@ -1228,7 +1228,7 @@ Flight::route('POST /register-user', function() {
 
         // Responder con éxito
         // mail($email, "Tu código de verificación", "Tu código es: $codigoVerificacion");
-        $site_url = getenv('URL_SITE')};
+        $site_url = getenv('URL_SITE');
         try{
             $mailToSend = sendEmail("Confirma tu cuenta DDSC, {$user}!",
             $user,
@@ -2623,7 +2623,7 @@ function enviarNotificaciones($subscriptions, $title, $body, $infoLogo, $infoMod
 
     $webPush = new WebPush(['VAPID' => $vapidKeys]);
     $enviadas = 0;
-    $site_url = getenv('URL_SITE')};
+    $site_url = getenv('URL_SITE');
 
     foreach ($subscriptions as $sub) {
         $subscription = Subscription::create([

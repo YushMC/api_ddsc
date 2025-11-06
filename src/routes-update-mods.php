@@ -305,7 +305,7 @@ Flight::route('POST /add-mod', function() {
         $webPush = new WebPush([
             'VAPID' => $vapidKeys
         ]);
-        $site_url = getenv('URL_SITE')};
+        $site_url = getenv('URL_SITE');
         // Enviar notificaciones a todas las suscripciones
         foreach ($subscriptions as $sub) {
             $subscription = Subscription::create([
@@ -1051,7 +1051,7 @@ Flight::route('PUT /mod/@id/change-link-pc', function($id){
                 $webPush = new WebPush([
                     'VAPID' => $vapidKeys
                 ]);
-                $site_url = getenv('URL_SITE')};
+                $site_url = getenv('URL_SITE');
                 // Enviar notificaciones a todas las suscripciones
                 foreach ($subscriptions as $sub) {
                     $subscription = Subscription::create([
@@ -1166,7 +1166,7 @@ Flight::route('PUT /mod/@id/change-link-android', function($id){
                     'VAPID' => $vapidKeys
                 ]);
 
-                $site_url = getenv('URL_SITE')};
+                $site_url = getenv('URL_SITE');
             
                 // Enviar notificaciones a todas las suscripciones
                 foreach ($subscriptions as $sub) {
