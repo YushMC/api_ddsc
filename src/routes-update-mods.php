@@ -75,10 +75,7 @@ Flight::route('POST /add-mod', function() {
 
 
     // Validar que el usuario solo contenga letras y números
-    if (!preg_match('/^[\p{L}\p{N}\p{P}\p{Zs}\n\r]{10,1000}$/u', $descriptionMod)) {
-        Flight::halt(400, json_encode(["error" => "La descripción del mod no es válida. Debe tener entre 10 y 1000 caracteres y solo caracteres permitidos."]));
-        return;
-    }
+   
 
     
      // Validar que el usuario solo contenga letras y números
@@ -954,10 +951,7 @@ Flight::route('PUT /mod/@id/change-description', function($id){
     $descriptionMod = $request['descripcion'] ?? 'Sin descripción.';
 
     // Validar que los datos no estén vacíos
-    if (!preg_match('/^[\p{L}\p{N}\p{P}\p{Zs}\n\r]{10,1000}$/u', $descriptionMod)) {
-        Flight::halt(400, json_encode(["error" => "La descripción del mod no es válida. Debe tener entre 10 y 1000 caracteres y solo caracteres permitidos."]));
-        return;
-    }
+    
     
     // Actualizar la contraseña en la base de datos
     $stmt = $db->prepare("UPDATE mods SET descripcion = ? WHERE id = ?");
