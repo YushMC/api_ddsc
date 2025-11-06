@@ -21,7 +21,7 @@ function generarCorreoHTML($nombre, $titulo, $mensaje, $textoBoton, $urlBoton, $
         : "";
 
     // Logo DDSC
-    $site_url = getenv('URL_SITE')};
+    $site_url = getenv('URL_SITE');
     $logoUrl = "{$site_url}/images/Logo_DDSC.png";
     $comunidadUrl = "{$site_url}/images/banner_comunidad.jpg";
 
