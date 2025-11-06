@@ -631,12 +631,6 @@ Flight::route('POST /login', function() {
     // Si es válido, se sanitiza
     $usuario = filter_var($usuario, FILTER_SANITIZE_SPECIAL_CHARS);
 
-    // Validar que el usuario solo contenga letras y números
-    if (!preg_match('/^[A-Za-z\d_*#$%-]{8,12}$/', $password)) {
-        Flight::halt(400, json_encode(["error" => "La contraseña es incorrecta"]));
-        return;
-    }
-
     // Si es válido, se sanitiza
     $password = filter_var($password, FILTER_SANITIZE_SPECIAL_CHARS);
 
@@ -833,11 +827,11 @@ Flight::route('POST /verify-user', function() {
             if($mailToSend){
                 Flight::json(["message" => "Cuenta verificada exitosamente. Se han enviado los codigos de recuperación, por favor revisa tu correo electrónico e inicia sesión."]);
             }else{
-                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " . $mail->ErrorInfo]));
+                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
                 return;
             }
         }catch(Exception $e){
-            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " . $mail->ErrorInfo]));
+            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
             return;
         }
     } catch (Exception $e) {
@@ -931,11 +925,11 @@ Flight::route('PUT  /verify-user/id/@id_user', function($id_user) {
             if($mailToSend){
                 Flight::json(["message" => "Cuenta verificada exitosamente. Se han enviado los codigos de recuperación al correo del usuario."]);
             }else{
-                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " . $mail->ErrorInfo]));
+                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
                 return;
             }
         }catch(Exception $e){
-            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " . $mail->ErrorInfo]));
+            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
             return;
         }
     } catch (Exception $e) {
@@ -1010,11 +1004,11 @@ Flight::route('PUT  /change-user-email/id/@id_user', function($id_user) {
             if($mailToSend){
                 Flight::json(["message" => "Usuario registrado. Ingresa a tu correo para verificar y acceder la cuenta."]);
             }else{
-                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " . $mail->ErrorInfo]));
+                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
             return;
             }
         }catch(Exception $e){
-            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " . $mail->ErrorInfo]));
+            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
             return;
         }
     } catch (Exception $e) {
@@ -1240,90 +1234,12 @@ Flight::route('POST /register-user', function() {
             if($mailToSend){
                 Flight::json(["message" => "Usuario registrado. Ingresa a tu correo para verificar y acceder la cuenta."]);
             }else{
-                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " . $mail->ErrorInfo]));
+                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " ]));
             return;
             }
         }catch(Exception $e){
-            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " . $mail->ErrorInfo]));
+            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " ]));
             return;
-        }
-    } catch (Exception $e) {
-        Flight::halt(500, json_encode(["error" => "Error en el servidor: " . $e->getMessage()]));
-        return;
-    }
-});
-
-Flight::route('POST /register-team', function() {
-    $req = Flight::request();
-
-    // Leer el token directamente del header Authorization
-    $token = $req->getHeader('Authorization');
-    
-    if (!$token) {
-        Flight::halt(401, json_encode(["error" => "No autenticado"]));
-        return;
-    }
-    
-    Auth::init();
-    
-    $authData = Auth::verificarToken($token); // Verificar y decodificar el token
-
-    if (!$authData) {
-        Flight::halt(401, json_encode(["error" => "Token inválido o expirado."]));
-        return;
-    }
-    $userId = $authData->data->id; // Obtener el ID del usuario desde el token
-    $userRol = $authData->data->rol;
-    
-    if($userRol != 4){
-        Flight::halt(401, json_encode(["error" => "No tienes los permisos para realizar esta acción."]));
-        return;
-    }
-    
-    // Obtener los datos enviados desde el frontend
-    $request = json_decode(file_get_contents("php://input"), true);
-
-    // Validar que los datos requeridos estén presentes || !isset($request['token'])
-    if (!isset($request['name'])) {
-        Flight::halt(400, json_encode(["error" => "El nombre del equipo es obligatorio."]));
-        return;
-    }
-    // $token = $request['token'];
-    $name = $request['name'];
-    
-    if (!preg_match('/^[a-zA-Z0-9_]+$/', $name)) {
-        Flight::halt(400, json_encode(["error" => "Nombre del equipo inválido"]));
-        return;
-    }
-    // Si es válido, se sanitiza
-    $name = filter_var($name, FILTER_SANITIZE_SPECIAL_CHARS);
-
-    // Validar que el usuario solo contenga letras y números
-
-    $slug = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', str_replace(",", "",str_replace(".","",str_replace(" ", "-", strtolower(trim($name))))));
-
-
-    try {
-        // Conectar a la base de datos
-        $db = Flight::db();
-        
-        // Verificar si el usuario ya existe
-        $stmt = $db->prepare("SELECT id FROM teams WHERE name = ?");
-        $stmt->execute([$name]);
-        if ($stmt->fetch()) {
-            Flight::halt(400, json_encode(["error" => "El equipo ya existe."]));
-            return;
-        }
-
-        // Insertar el usuario en la base de datos
-        $stmt = $db->prepare("INSERT INTO teams (name, slug, active) VALUES (?, ?, ?)");
-        $stmt->execute([$user, $slug, 1]);
-        
-        if($stmt->execute([$user, $slug, 1])){
-            Flight::json(["message" => "Equipo registrado."]);
-        }else{
-            Flight::halt(500, json_encode(["error" => "Error al guardar el equipo: "]));
-        return;
         }
     } catch (Exception $e) {
         Flight::halt(500, json_encode(["error" => "Error en el servidor: " . $e->getMessage()]));
@@ -1727,7 +1643,7 @@ Flight::route('POST /register-user-admin', function() {
         if($stmt->execute([$user,$hashedPassword,$alias,$slug,1,$email,1])){
             Flight::json(["message" => "Usuario registrado. Ingresa a tu correo para verificar y acceder la cuenta."]);
         }else{
-            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " . $mail->ErrorInfo]));
+            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " ]));
         }
     } catch (Exception $e) {
         Flight::halt(500, json_encode(["error" => "Error en el servidor: " . $e->getMessage()]));
@@ -1815,11 +1731,11 @@ Flight::route('PUT /change-password', function(){
             if($mailToSend){
                 Flight::json(["message" => "Contraseña actualizada correctamente. La nueva contraseña será necesaria en el siguiente inicio de sesión."]);
             }else{
-                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " . $mail->ErrorInfo]));
+                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
                 return;
             }
         }catch(Exception $e){
-            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " . $mail->ErrorInfo]));
+            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
             return;
         }
         
@@ -2654,4 +2570,3 @@ function enviarNotificaciones($subscriptions, $title, $body, $infoLogo, $infoMod
         }
     }
 }
-
