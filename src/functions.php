@@ -76,8 +76,8 @@ function sendEmail($subject, $user,$title,$body,$textLink,$link){
     $mail->Subject= $subject;
     $mail->msgHTML($body);
     if($mail->send()){
-        return True
+        return True;
     }else{
-        return False
+        return False;
     }
 }
