@@ -1,8 +1,4 @@
 <?php
-
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
-
 //funciones
 
 function comprobar($datos){
@@ -2734,4 +2730,3 @@ Flight::route('GET /mods/name/@name', function ($name) {
     ]);
     }
 });
-
