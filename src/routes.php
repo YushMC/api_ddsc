@@ -578,7 +578,8 @@ Flight::route('GET /users-admin', function() {
     $db = Flight::db();
     $stmt = $db->prepare("
         SELECT u.*, r.nombre AS rol_nombre 
-        FROM users
+        FROM users u
+        INNER JOIN roles r ON u.id_rol = r.id
         ");
     $stmt->execute();
     $user = $stmt->fetchAll(PDO::FETCH_ASSOC);
