@@ -584,15 +584,13 @@ Flight::route('GET /users-admin', function() {
     $stmt->execute();
     $user = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    $array = comprobarInfoUsers3($user);
+    
     //$headers = getToken();
     Flight::json([
         "response"=> "success",
         "total_rows" => $stmt->rowCount(),
-        "results"=> $array,
+        "results"=> $user,
     ]);
-    
-    
 });
 
 Flight::route('GET /users/team-ddsc', function() {
