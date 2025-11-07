@@ -1036,7 +1036,7 @@ Flight::route('PUT  /verify-user/id/@id_user', function($id_user) {
             "Tu cuenta se verificó correctamente",
             "los siguientes códigos de recuperación son de solo un uso, NO LOS COMPARTAS CON NADIE!. 1. {$code1} 2. {$code2} 3. {$code3}",
             "Ir al sitio",
-            getenv('URL_SITE').
+            getenv('URL_SITE'),
             $usuarioMail
         );
             
@@ -1846,7 +1846,7 @@ Flight::route('PUT /change-password', function(){
             "Tu contraseña fue actualizada",
              "Tu contraseña se cambió correctamente. Si no realizaste este cambio, contacta a soporte por nuestras redes sociales (Discord: Team DDSC Web).",
             "Ir al Sitio",
-            getenv('URL_SITE').
+            getenv('URL_SITE'),
             $userMail
         );
             if($mailToSend){
@@ -2668,16 +2668,15 @@ function enviarNotificaciones($subscriptions, $title, $body, $infoLogo, $infoMod
             'keys' => ['p256dh' => $sub['p256dh'], 'auth' => $sub['auth']],
         ]);
 
-        $result = $webPush->queueNotification($subscription, json_encode([
+        $webPush->queueNotification($subscription, json_encode([
             'title' => $title,
             'body' => $body,
             'icon' => "https://api.dokidokispanish.club/" . ($infoLogo['url'] ?? 'default.png'),
             'data' => ['url' => "{$site_url}/mods/" . $infoMods['slug']]
         ]));
 
-        if ($result) {
-            $enviadas++;
-        }
+        // queueNotification() no devuelve valor; contamos las notificaciones encoladas por cada llamada
+        $enviadas++;
     }
 
     error_log("Notificaciones en cola: " . $enviadas);
