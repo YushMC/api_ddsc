@@ -579,17 +579,17 @@ Flight::route('GET /users-admin', function() {
     $stmt = $db->prepare("
         SELECT u.*, r.nombre AS rol_nombre 
         FROM users u
-        INNER JOIN roles r ON u.id_rol = r.id
+        INNER JOIN roles r ON u.id_rol = r.id ORDER BY u.id ASC
         ");
     $stmt->execute();
     $user = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    
+    $array = comprobarInfoUsers3($user);
     //$headers = getToken();
     Flight::json([
         "response"=> "success",
         "total_rows" => $stmt->rowCount(),
-        "results"=> $user,
+        "results"=> $array,
     ]);
 });
 
