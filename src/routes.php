@@ -578,8 +578,7 @@ Flight::route('GET /users-admin', function() {
     $db = Flight::db();
     $stmt = $db->prepare("
         SELECT u.*, r.nombre AS rol_nombre 
-        FROM users u
-        INNER JOIN roles r ON u.id_rol = r.id
+        FROM users
         ");
     $stmt->execute();
     $user = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -942,7 +941,7 @@ Flight::route('PUT /recovery-password', function() {
         );
             
             if($mailToSend){
-                Flight::json(["message" => "Tu contraseñña fue cambiada correctamente."]);
+                Flight::json(["message" => "Se envió un correo para continuar con tu solicitud"]);
             }else{
                 Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
                 return;
