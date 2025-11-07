@@ -52,7 +52,7 @@ function convertirAWebP($original, $destino) {
     return false;
 }
 
-function sendEmail($subject, $user,$title,$body,$textLink,$link){
+function sendEmail($subject, $user,$title,$body,$textLink,$link, $email){
     $mail = new PHPMailer(true);
     $mail->isSMTP();
     $mail->Host = 'smtp.hostinger.com';
@@ -62,7 +62,7 @@ function sendEmail($subject, $user,$title,$body,$textLink,$link){
     $mail->SMTPSecure = 'ssl';
     $mail->Port=465;
     $mail->setFrom('soporte@dokidokispanish.club', 'Soporte DDSC');
-    $mail ->addAddress($user['email']);
+    $mail ->addAddress($email);
     $mail->addCustomHeader('X-Auto-Response-Suppress', 'All');
     $mail->addCustomHeader('Auto-Submitted', 'auto-generated');
     $mail->isHTML(true);

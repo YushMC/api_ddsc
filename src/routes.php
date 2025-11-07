@@ -821,11 +821,128 @@ Flight::route('POST /verify-user', function() {
             "Tu cuenta se verificó correctamente",
             "los siguientes códigos de recuperación son de solo un uso, NO LOS COMPARTAS CON NADIE!. 1. {$code1} 2. {$code2} 3. {$code3}",
             "Ir al sitio",
-            getenv('URL_SITE')
+            getenv('URL_SITE'),
+            $emailUser
         );
             
             if($mailToSend){
                 Flight::json(["message" => "Cuenta verificada exitosamente. Se han enviado los codigos de recuperación, por favor revisa tu correo electrónico e inicia sesión."]);
+            }else{
+                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
+                return;
+            }
+        }catch(Exception $e){
+            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
+            return;
+        }
+    } catch (Exception $e) {
+        Flight::halt(500, json_encode(["error" => "Error en el servidor: " . $e->getMessage()]));
+        return;
+    }
+});
+
+Flight::route('PUT /change-password-recovery', function() {
+    $request = json_decode(file_get_contents("php://input"), true);
+    $codigo = $request['code'] ?? null;
+    $email = $request['email'] ?? null;
+    $password = $request['password'] ?? null;
+    $password = filter_var($password, FILTER_SANITIZE_SPECIAL_CHARS);
+    $codigo = filter_var($codigo, FILTER_SANITIZE_SPECIAL_CHARS);
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        Flight::halt(400, json_encode(["error" => "Correo inválido"]));
+        return;
+    }
+    $options = ['cost' => 10]; // Cost recomendado: 10-14
+    $hashedPassword = password_hash($password, PASSWORD_DEFAULT, $options);
+
+    try {
+        $db = Flight::db();
+        
+        // Buscar usuario con ese código y email
+        $stmt = $db->prepare("SELECT * FROM users WHERE email = ? AND verify_code = ?");
+        $stmt->execute([$email, $codigo]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user) {
+            Flight::halt(400, json_encode(["error" => "Código inválido."]));
+            return;
+        }
+
+        // Marcar la cuenta como verificada
+        $stmt = $db->prepare("UPDATE users SET user_password= ? ,verify_code = NULL WHERE id = ?");
+        $stmt->execute([$hashedPassword,$user['id']]);
+        
+        $emailUser = $user['email'];
+        $idUser = $user['id'];
+        $nameUser = $user['user'];
+        
+        try{
+            $mailToSend = sendEmail("Contraseña cambiada: {$nameUser}!",
+            $nameUser,
+            "Tu cuenta cambio de contraseña",
+            "Si no reconoces estos cambios, contacta con nuestro soporte, para atender tu caso!",
+            "Ir al sitio",
+            getenv('URL_SITE'),
+            $emailUser
+        );
+            
+            if($mailToSend){
+                Flight::json(["message" => "Tu contraseñña fue cambiada correctamente."]);
+            }else{
+                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
+                return;
+            }
+        }catch(Exception $e){
+            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
+            return;
+        }
+    } catch (Exception $e) {
+        Flight::halt(500, json_encode(["error" => "Error en el servidor: " . $e->getMessage()]));
+        return;
+    }
+});
+
+Flight::route('PUT /recovery-password', function() {
+    $request = json_decode(file_get_contents("php://input"), true);
+    $email = $request['email'] ?? null;
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        Flight::halt(400, json_encode(["error" => "Correo inválido"]));
+        return;
+    }
+
+    try {
+        $db = Flight::db();
+        
+        // Buscar usuario con ese código y email
+        $stmt = $db->prepare("SELECT * FROM users WHERE email = ?");
+        $stmt->execute([$email]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user) {
+            Flight::halt(400, json_encode(["error" => "El correo no existe."]));
+            return;
+        }
+        $codigoVerificacion = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT); 
+
+        // Marcar la cuenta como verificada
+        $stmt = $db->prepare("UPDATE users SET verify_code = ? WHERE id = ?");
+        $stmt->execute([$codigoVerificacion,$user['id']]);
+        
+        $emailUser = $user['email'];
+        $nameUser = $user['user'];
+        $site_url = getenv('URL_SITE');
+        try{
+            $mailToSend = sendEmail("Solicitud de cambio de contraseña {$nameUser}!",
+            $nameUser,
+            "Cambia tu contraseña!",
+            "Para realizar tu cambio de contraseña es importante ir al siguiente enlace.",
+            "Cambiar contraseña",
+            "{$site_url}/recuperar?email={$emailUser}&code={$codigoVerificacion}",
+            $emailUser
+        );
+            
+            if($mailToSend){
+                Flight::json(["message" => "Tu contraseñña fue cambiada correctamente."]);
             }else{
                 Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
                 return;
@@ -914,12 +1031,13 @@ Flight::route('PUT  /verify-user/id/@id_user', function($id_user) {
         
         try{
             $usuarioMail=$user['user'];
-            $mailToSend = sendEmail("Codigos de recuperacion para tu cuenta en DDSC: {$usuarioMail}!",
-            $usuarioMail,
+            $mailToSend = sendEmail("Codigos de recuperacion para tu cuenta en DDSC: {$nameUser}!",
+            $nameUser,
             "Tu cuenta se verificó correctamente",
             "los siguientes códigos de recuperación son de solo un uso, NO LOS COMPARTAS CON NADIE!. 1. {$code1} 2. {$code2} 3. {$code3}",
             "Ir al sitio",
-            getenv('URL_SITE')
+            getenv('URL_SITE').
+            $usuarioMail
         );
             
             if($mailToSend){
@@ -999,7 +1117,8 @@ Flight::route('PUT  /change-user-email/id/@id_user', function($id_user) {
             "Verifica tu Cuenta",
             "Para acceder a tu cuenta de Doki Doki Spanish Club, es necesario verificar tu cuenta con el siguiente enlace.",
             "Verificar Cuenta",
-            "{$site_url}/verificar?email={$email}&code={$codigoVerificacion}"
+            "{$site_url}/verificar?email={$email}&code={$codigoVerificacion}",
+            $email
         );
             if($mailToSend){
                 Flight::json(["message" => "Usuario registrado. Ingresa a tu correo para verificar y acceder la cuenta."]);
@@ -1229,7 +1348,8 @@ Flight::route('POST /register-user', function() {
             "Verifica tu Cuenta",
             "Para acceder a tu cuenta de Doki Doki Spanish Club, es necesario verificar tu cuenta con el siguiente enlace.",
             "Verificar Cuenta",
-            "{$site_url}/verificar?email={$email}&code={$codigoVerificacion}"
+            "{$site_url}/verificar?email={$email}&code={$codigoVerificacion}",
+            $email
         );
             if($mailToSend){
                 Flight::json(["message" => "Usuario registrado. Ingresa a tu correo para verificar y acceder la cuenta."]);
@@ -1726,7 +1846,8 @@ Flight::route('PUT /change-password', function(){
             "Tu contraseña fue actualizada",
              "Tu contraseña se cambió correctamente. Si no realizaste este cambio, contacta a soporte por nuestras redes sociales (Discord: Team DDSC Web).",
             "Ir al Sitio",
-            getenv('URL_SITE')
+            getenv('URL_SITE').
+            $userMail
         );
             if($mailToSend){
                 Flight::json(["message" => "Contraseña actualizada correctamente. La nueva contraseña será necesaria en el siguiente inicio de sesión."]);
