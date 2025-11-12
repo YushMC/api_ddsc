@@ -694,7 +694,9 @@ Flight::route('POST /mod/@id/update-logo', function($id) {
     }
 });
 
-Flight::route('POST /mod/@id/update-front-page', function($id) {
+
+
+Flight::route('POST /mod/@id/update-screens-page', function($id) {
     $req = Flight::request();
 
     // Leer el token directamente del header Authorization
@@ -727,79 +729,31 @@ Flight::route('POST /mod/@id/update-front-page', function($id) {
     
     $db = Flight::db();
     
-    // Verificar si se envió un archivo
-    if (!isset($_FILES['file'])) {
-        Flight::json(["error" => "No se ha enviado ningún archivo"], 400);
-        return;
-    }
-
-    $file = $_FILES['file'];
-    
-    if ($file['error'] !== UPLOAD_ERR_OK) {
-        Flight::json(["error" => "Error al subir el archivo: " . $file['error']], 400);
-        return;
-    }
-    
-    $smtLog = $db->prepare("SELECT * FROM mods WHERE id = ?");
-    $smtLog->execute([$idMod]);
-    $rseultLogo = $smtLog->fetch(PDO::FETCH_ASSOC);
-    
-    if(!$rseultLogo){
-        Flight::json(["error" => "No se encontró ningun mod"], 404);
-        return;
-    }
-
-    $uploadDir = 'images/mods/'.$rseultLogo['id'];
-    
-    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-    $newFileName = 'portada_' . uniqid() . '.' . $extension;
-    
-    // Crear la carpeta si no existe
-   if(!file_exists($uploadDir)){
-        mkdir($uploadDir, 0777, true);
-    }
-    // Obtener la ruta actual desde la base de datos
-    $smtImagenLogo = $db->prepare("SELECT * FROM imagenes_mod WHERE id_mod = ? AND id_tipo_imagen = 3");
-    $smtImagenLogo->execute([$rseultLogo['id']]);
-    $rseultLogoDir= $smtImagenLogo->fetch(PDO::FETCH_ASSOC);
-    $newFilePathSql = $uploadDir."/". $newFileName;
-    $webpFilePath = "images/mods/" . $idMod."/". pathinfo($newFileName, PATHINFO_FILENAME) . ".webp"; // Ruta WebP
-
-    if ($rseultLogoDir) {
-        $existingFilePath = $rseultLogoDir['url'];
-        // Verificar si el archivo existe en el servidor
-        if($rseultLogoDir["url"]!="gui/Imagen-no-disponible.jpg"){
-            if (file_exists($existingFilePath)) {
-                unlink($existingFilePath); // Eliminar archivo existente
-            }
+    if(isset($_FILES['capturas'])){
+        $uploadDir = 'images/mods/'.$idMod;
+        if(!file_exists($uploadDir)){
+            mkdir($uploadDir, 0777, true);
         }
-        if (move_uploaded_file($file['tmp_name'],  $newFilePathSql)) {
-            // Actualizar la ruta en la base de datos sin eliminar el registro
-             if (convertirAWebP($newFilePathSql, $webpFilePath)) {
-                $updateStmt = $db->prepare("UPDATE imagenes_mod SET url = ? WHERE id = ?");
-                $updateStmt->execute([$newFilePathSql, $rseultLogoDir['id']]);
-                Flight::json(["message" => "Portada reemplazada correctamente. Recomendamos recargar la página para ver los datos actualizados."]);
-             }else{
-                 Flight::json(["error" => "Error al subir el archivo"], 500);
-                return;
-             }
-        } else {
-            Flight::json(["error" => "Error al subir el archivo al servidor"], 500);
-            return;
-        }
-    }else{
-        if(move_uploaded_file($file['tmp_name'], $newFilePathSql)){
-            if (convertirAWebP($newFilePathSql, $webpFilePath)) {
+        foreach ($_FILES['capturas']['tmp_name'] as $key => $tmp_name) {
+            $fileName = $_FILES['capturas']['name'][$key]; // Obtener el nombre del archivo correcto
+            $extension = pathinfo($fileName, PATHINFO_EXTENSION);
+            $newFileName = 'captura_' . uniqid() . '.' . $extension;
+            $webpFilePath = "images/mods/" . $idMod."/". pathinfo($newFileName, PATHINFO_FILENAME) . ".webp"; // Ruta WebP
+            $newFilePathSql = "images/mods/". $idMod."/". $newFileName; 
+        
+            if(move_uploaded_file($tmp_name, $newFilePathSql)){
+                
+                if (convertirAWebP($newFilePathSql, $webpFilePath)) {
                 $db = Flight::db();
                 $stmt2 = $db->prepare("INSERT INTO imagenes_mod (id_mod, id_tipo_imagen, url) VALUES (?, ?, ?)");
-                $stmt2->execute([$id,3, $webpFilePath]);
-                Flight::json(["message" => "Portada reemplazada correctamente. Recomendamos recargar la página para ver los datos actualizados."]);
-            }else{
-                Flight::json(["error" => "Error al subir el archivo"], 500);
-                return;
+                $stmt2->execute([$idMod,2, $webpFilePath]);
+                }
+                
             }
-                 
         }
+    }else{
+        Flight::json(["error" => "No se ha enviado ningún archivo"], 400);
+    return;
     }
 });
 
@@ -868,7 +822,7 @@ Flight::route('POST /mod/@id/update-front-page', function($id) {
         mkdir($uploadDir, 0777, true);
     }
     // Obtener la ruta actual desde la base de datos
-    $smtImagenLogo = $db->prepare("SELECT * FROM imagenes_mod WHERE id_mod = ? AND id_tipo_imagen = 1");
+    $smtImagenLogo = $db->prepare("SELECT * FROM imagenes_mod WHERE id_mod = ? AND id_tipo_imagen = 3");
     $smtImagenLogo->execute([$rseultLogo['id']]);
     $rseultLogoDir= $smtImagenLogo->fetchAll(PDO::FETCH_ASSOC);
     $newFilePathSql = $uploadDir."/". $newFileName;
