@@ -2279,7 +2279,7 @@ Flight::route('POST /add-mod-terminated', function(){
 
     $description = intval($request['id_mod']) ?? 1;
     
-    if (!preg_match('/^[0-9]$/u', $description)) {
+    if (!preg_match('/^[0-9]+$/', $description)) {
         Flight::halt(400, json_encode(["error" => "El id del mod no es valido."]));
         return;
     }
