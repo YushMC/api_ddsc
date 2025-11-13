@@ -4,6 +4,7 @@ require_once 'flags.php';
 
 use Minishlink\WebPush\WebPush;
 use Minishlink\WebPush\Subscription;
+use SpomkyLabs\Pki\ASN1\Type\Primitive\Integer;
 use WebPConvert\WebPConvert;
 
 function generarCorreoHTML($nombre, $titulo, $mensaje, $textoBoton, $urlBoton, $codigo = null) {
@@ -2276,7 +2277,7 @@ Flight::route('POST /add-mod-terminated', function(){
 
     $userId = $authData->data->id; // Obtener el ID del usuario desde el token
 
-    $description = $request['id_mod'] ?? 1;
+    $description = intval($request['id_mod']) ?? 1;
     
     if (!preg_match('/^[0-9]$/u', $description)) {
         Flight::halt(400, json_encode(["error" => "El id del mod no es valido."]));
