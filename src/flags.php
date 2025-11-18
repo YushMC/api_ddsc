@@ -25,6 +25,6 @@ function getBandera($id){
     if($id == 0){
         return "";
     }else{
-        return "https://www.dokidokispanish.club/".$array[$id];
+        return "https://anitguo.dokidokispanish.club/".$array[$id];
     }
 }

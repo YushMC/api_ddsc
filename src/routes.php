@@ -122,6 +122,7 @@ function comprobarInfoUsers($datos) {
             "url_logo" => "https://api.dokidokispanish.club/" . $row['url_logo'],
             "url_banner" => "https://api.dokidokispanish.club/" . $row['url_banner'],
             "url_fondo_pantalla" => "https://api.dokidokispanish.club/" . $row['url_wallpaper'],
+            "position_banner"=> $row['position_banner'],
         ];
     }
 
