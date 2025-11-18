@@ -1136,6 +1136,68 @@ Flight::route('PUT  /change-user-email/id/@id_user', function($id_user) {
     }
 });
 
+Flight::route('PUT  /change-position-banner', function($id_user) {
+    $req = Flight::request();
+
+    // Leer el token directamente del header Authorization
+    $token = $req->getHeader('Authorization');
+    
+    if (!$token) {
+        Flight::halt(401, json_encode(["error" => "No autenticado"]));
+        return;
+    }
+    
+    
+    Auth::init();
+    date_default_timezone_set('America/Mexico_City');
+    
+    $authData = Auth::verificarToken($token); // Verificar y decodificar el token
+
+    if (!$authData) {
+        Flight::halt(401, json_encode(["error" => "Token inválido o expirado."]));
+        return;
+    }
+    $userId = $authData->data->id; // Obtener el ID del usuario desde el token
+    $userRol = $authData->data->rol;
+    
+    if($userRol != 4){
+        Flight::halt(401, json_encode(["error" => "No tienes los permisos para realizar esta acción."]));
+        return;
+    }
+    
+    if (!preg_match('/^[0-9]+$/', $userId)) {
+        Flight::halt(400, json_encode(["error" => "Id inválido"]));
+        return;
+    }
+    $request = json_decode(file_get_contents("php://input"), true);
+    
+    $email = $request['position'];
+
+    if (!preg_match('/^[0-9]+$/', $email)) {
+        Flight::halt(400, json_encode(["error" => "Posición no valida"]));
+        return;
+    }
+
+    try {
+        $db = Flight::db();
+
+        // Marcar la cuenta como verificada
+        $stmt = $db->prepare("UPDATE users SET position_banner = ? WHERE id = ?");
+        
+       
+            if($stmt->execute([$email,$userId])){
+                Flight::json(["message" => "Usuario registrado. Ingresa a tu correo para verificar y acceder la cuenta."]);
+            }else{
+                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
+            return;
+            }
+        
+    } catch (Exception $e) {
+        Flight::halt(500, json_encode(["error" => "Error en el servidor: " . $e->getMessage()]));
+        return;
+    }
+});
+
 Flight::route('PUT  /change-user-rol/id/@id_user', function($id_user) {
     $req = Flight::request();
 
