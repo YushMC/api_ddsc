@@ -1186,9 +1186,9 @@ Flight::route('PUT  /change-position-banner', function() {
         
        
             if($stmt->execute([$email,$userId])){
-                Flight::json(["message" => "Usuario registrado. Ingresa a tu correo para verificar y acceder la cuenta."]);
+                Flight::json(["message" => "Posición cambiada"]);
             }else{
-                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
+                Flight::halt(500, json_encode(["error" => "Error al cambiar de posición"]));
             return;
             }
         
