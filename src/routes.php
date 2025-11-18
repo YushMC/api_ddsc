@@ -1136,7 +1136,7 @@ Flight::route('PUT  /change-user-email/id/@id_user', function($id_user) {
     }
 });
 
-Flight::route('PUT  /change-position-banner', function($id_user) {
+Flight::route('PUT  /change-position-banner', function() {
     $req = Flight::request();
 
     // Leer el token directamente del header Authorization
@@ -1187,6 +1187,60 @@ Flight::route('PUT  /change-position-banner', function($id_user) {
        
             if($stmt->execute([$email,$userId])){
                 Flight::json(["message" => "Usuario registrado. Ingresa a tu correo para verificar y acceder la cuenta."]);
+            }else{
+                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
+            return;
+            }
+        
+    } catch (Exception $e) {
+        Flight::halt(500, json_encode(["error" => "Error en el servidor: " . $e->getMessage()]));
+        return;
+    }
+});
+
+Flight::route('GET  /get-position-banner', function() {
+    $req = Flight::request();
+
+    // Leer el token directamente del header Authorization
+    $token = $req->getHeader('Authorization');
+    
+    if (!$token) {
+        Flight::halt(401, json_encode(["error" => "No autenticado"]));
+        return;
+    }
+    
+    
+    Auth::init();
+    date_default_timezone_set('America/Mexico_City');
+    
+    $authData = Auth::verificarToken($token); // Verificar y decodificar el token
+
+    if (!$authData) {
+        Flight::halt(401, json_encode(["error" => "Token inválido o expirado."]));
+        return;
+    }
+    $userId = $authData->data->id; // Obtener el ID del usuario desde el token
+    $userRol = $authData->data->rol;
+    
+    if($userRol != 4){
+        Flight::halt(401, json_encode(["error" => "No tienes los permisos para realizar esta acción."]));
+        return;
+    }
+    
+    if (!preg_match('/^[0-9]+$/', $userId)) {
+        Flight::halt(400, json_encode(["error" => "Id inválido"]));
+        return;
+    }
+
+
+    try {
+        $db = Flight::db();
+
+        // Marcar la cuenta como verificada
+        $stmt = $db->prepare("SELECT position_banner FROM users WHERE id = ?");
+            if($stmt->execute([$userId])){
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                Flight::json(["position" => $result['position_banner']]);
             }else{
                 Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
             return;
