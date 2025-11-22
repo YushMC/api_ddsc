@@ -855,7 +855,7 @@ Flight::route('POST /mod/@id/update-front-page', function($id) {
             if (convertirAWebP($newFilePathSql, $webpFilePath)) {
                 $db = Flight::db();
                 $stmt2 = $db->prepare("INSERT INTO imagenes_mod (id_mod, id_tipo_imagen, url) VALUES (?, ?, ?)");
-                $stmt2->execute([$id,1, $webpFilePath]);
+                $stmt2->execute([$id,3, $webpFilePath]);
                 Flight::json(["message" => "Portada reemplazado correctamente. Recomendamos recargar la página para ver los datos actualizados."]);
             }else{
                 Flight::json(["error" => "Error al subir el archivo"], 500);
