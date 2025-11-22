@@ -824,7 +824,7 @@ Flight::route('POST /mod/@id/update-front-page', function($id) {
     // Obtener la ruta actual desde la base de datos
     $smtImagenLogo = $db->prepare("SELECT * FROM imagenes_mod WHERE id_mod = ? AND id_tipo_imagen = 3");
     $smtImagenLogo->execute([$rseultLogo['id']]);
-    $rseultLogoDir= $smtImagenLogo->fetchAll(PDO::FETCH_ASSOC);
+    $rseultLogoDir= $smtImagenLogo->fetch(PDO::FETCH_ASSOC);
     $newFilePathSql = $uploadDir."/". $newFileName;
     $webpFilePath = "images/mods/" . $idMod."/". pathinfo($newFileName, PATHINFO_FILENAME) . ".webp"; // Ruta WebP
 
