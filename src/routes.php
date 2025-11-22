@@ -1158,12 +1158,7 @@ Flight::route('PUT  /change-position-banner', function() {
         return;
     }
     $userId = $authData->data->id; // Obtener el ID del usuario desde el token
-    $userRol = $authData->data->rol;
     
-    if($userRol != 4){
-        Flight::halt(401, json_encode(["error" => "No tienes los permisos para realizar esta acción."]));
-        return;
-    }
     
     if (!preg_match('/^[0-9]+$/', $userId)) {
         Flight::halt(400, json_encode(["error" => "Id inválido"]));
