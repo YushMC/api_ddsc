@@ -668,7 +668,7 @@ Flight::route('POST /mod/@id/update-logo', function($id) {
             // Actualizar la ruta en la base de datos sin eliminar el registro
              if (convertirAWebP($newFilePathSql, $webpFilePath)) {
                 $updateStmt = $db->prepare("UPDATE imagenes_mod SET url = ? WHERE id = ?");
-                $updateStmt->execute([$newFilePathSql, $rseultLogoDir['id']]);
+                $updateStmt->execute([$newFilePathSql, $webpFilePath]);
                 Flight::json(["message" => "Logo reemplazado correctamente. Recomendamos recargar la página para ver los datos actualizados."]);
              }else{
                  Flight::json(["error" => "Error al subir el archivo"], 500);
