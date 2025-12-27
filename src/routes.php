@@ -770,76 +770,141 @@ Flight::route('POST /recovery-code', function (){
     }
 });
 
-Flight::route('POST /verify-user', function() {
-    $request = json_decode(file_get_contents("php://input"), true);
-    $codigo = $request['code'] ?? null;
-    $email = $request['email'] ?? null;
+Flight::route('POST /verify-user', function () {
 
-    if (!$codigo || !$email) {
-        Flight::halt(400, json_encode(["error" => "Código o email no proporcionados."]));
+    $request = json_decode(file_get_contents("php://input"), true);
+
+    $code  = $request['code']  ?? null;
+    $email = isset($request['email']) ? strtolower(trim($request['email'])) : null;
+    date_default_timezone_set('America/Mexico_City');
+
+    if (!$code || !$email) {
+        Flight::halt(400, json_encode([
+            "error" => "Código o email no proporcionados."
+        ]));
+        return;
+    }
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        Flight::halt(400, json_encode([
+            "error" => "Correo inválido."
+        ]));
         return;
     }
 
     try {
         $db = Flight::db();
-        
-        // Buscar usuario con ese código y email
-        $stmt = $db->prepare("SELECT * FROM users WHERE email = ? AND verify_code = ?");
-        $stmt->execute([$email, $codigo]);
+
+        /* ------------------------------------
+           BUSCAR USUARIO PENDIENTE
+        -------------------------------------*/
+        $stmt = $db->prepare("
+            SELECT id, user, email, verify, verify_expires_at
+            FROM users
+            WHERE email = ? AND verify_code = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$email, $code]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$user) {
-            Flight::halt(400, json_encode(["error" => "Código inválido."]));
+            Flight::halt(400, json_encode([
+                "error" => "Código de verificación inválido."
+            ]));
             return;
         }
 
-        // Marcar la cuenta como verificada
-        $stmt = $db->prepare("UPDATE users SET verify = 1, verify_code = NULL WHERE id = ?");
-        $stmt->execute([$user['id']]);
-        
-        $emailUser = $user['email'];
-        $idUser = $user['id'];
-        $nameUser = $user['user'];
-        
-        $code1 = generarCodigoRecuperacion();
-        $code2 = generarCodigoRecuperacion();
-        $code3 = generarCodigoRecuperacion();
-        
-        $stmt2 = $db->prepare("INSERT INTO recovery_user_codes (id_usuario, code_recovery, isUsed) VALUES (?, ?, ?)");
-        $stmt2->execute([$idUser, $code1, 0]);
-        
-        $stmt3 = $db->prepare("INSERT INTO recovery_user_codes (id_usuario, code_recovery, isUsed) VALUES (?, ?, ?)");
-        $stmt3->execute([$idUser, $code2, 0]);
-        
-        $stmt4 = $db->prepare("INSERT INTO recovery_user_codes (id_usuario, code_recovery, isUsed) VALUES (?, ?, ?)");
-        $stmt4->execute([$idUser, $code3, 0]);
-        
-        try{
-            $usuarioMail=$user['user'];
-            $mailToSend = sendEmail("Codigos de recuperacion para tu cuenta en DDSC: {$usuarioMail}!",
-            $usuarioMail,
-            "Tu cuenta se verificó correctamente",
-            "los siguientes códigos de recuperación son de solo un uso, NO LOS COMPARTAS CON NADIE!. 1. {$code1} 2. {$code2} 3. {$code3}",
-            "Ir al sitio",
-            getenv('URL_SITE'),
-            $emailUser
-        );
-            
-            if($mailToSend){
-                Flight::json(["message" => "Cuenta verificada exitosamente. Se han enviado los codigos de recuperación, por favor revisa tu correo electrónico e inicia sesión."]);
-            }else{
-                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
-                return;
-            }
-        }catch(Exception $e){
-            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
+        /* ------------------------------------
+           YA VERIFICADO
+        -------------------------------------*/
+        if ($user['verify'] == 1) {
+            Flight::halt(400, json_encode([
+                "error" => "La cuenta ya fue verificada."
+            ]));
             return;
         }
+
+        /* ------------------------------------
+           VERIFICACIÓN EXPIRADA
+        -------------------------------------*/
+        if (strtotime($user['verify_expires_at']) < time()) {
+            // eliminar cuenta expirada
+            $stmt = $db->prepare("DELETE FROM users WHERE id = ?");
+            $stmt->execute([$user['id']]);
+
+            Flight::halt(400, json_encode([
+                "error" => "El código de verificación expiró. Regístrate nuevamente."
+            ]));
+            return;
+        }
+
+        /* ------------------------------------
+           VERIFICAR CUENTA
+        -------------------------------------*/
+        $stmt = $db->prepare("
+            UPDATE users
+            SET verify = 1,
+                verify_code = NULL,
+                verify_expires_at = NULL
+            WHERE id = ?
+        ");
+        $stmt->execute([$user['id']]);
+
+        /* ------------------------------------
+           GENERAR CÓDIGOS DE RECUPERACIÓN
+        -------------------------------------*/
+        $idUser   = $user['id'];
+        $username = $user['user'];
+
+        $codes = [
+            generarCodigoRecuperacion(),
+            generarCodigoRecuperacion(),
+            generarCodigoRecuperacion()
+        ];
+
+        $stmt = $db->prepare("
+            INSERT INTO recovery_user_codes (id_usuario, code_recovery, isUsed)
+            VALUES (?, ?, 0)
+        ");
+
+        foreach ($codes as $recoveryCode) {
+            $stmt->execute([$idUser, $recoveryCode]);
+        }
+
+        /* ------------------------------------
+           ENVIAR EMAIL FINAL
+        -------------------------------------*/
+        $sent = sendEmail(
+            "Códigos de recuperación para tu cuenta DDSC, {$username}!",
+            $username,
+            "Tu cuenta fue verificada correctamente",
+            "Estos códigos de recuperación son de un solo uso. NO LOS COMPARTAS CON NADIE:\n\n"
+            . "1. {$codes[0]}\n"
+            . "2. {$codes[1]}\n"
+            . "3. {$codes[2]}",
+            "Ir al sitio",
+            getenv('URL_SITE'),
+            $email
+        );
+
+        if (!$sent) {
+            Flight::halt(500, json_encode([
+                "error" => "La cuenta fue verificada, pero ocurrió un error al enviar el correo."
+            ]));
+            return;
+        }
+
+        Flight::json([
+            "message" => "Cuenta verificada correctamente. Revisa tu correo con los códigos de recuperación e inicia sesión."
+        ]);
+
     } catch (Exception $e) {
-        Flight::halt(500, json_encode(["error" => "Error en el servidor: " . $e->getMessage()]));
-        return;
+        Flight::halt(500, json_encode([
+            "error" => "Error del servidor."
+        ]));
     }
 });
+
 
 Flight::route('PUT /change-password-recovery', function() {
     $request = json_decode(file_get_contents("php://input"), true);
@@ -957,105 +1022,175 @@ Flight::route('PUT /recovery-password', function() {
     }
 });
 
-Flight::route('PUT  /verify-user/id/@id_user', function($id_user) {
-    $req = Flight::request();
+Flight::route('PUT /verify-user/id/@id_user', function ($id_user) {
 
-    // Leer el token directamente del header Authorization
+    $req = Flight::request();
     $token = $req->getHeader('Authorization');
-    
+
     if (!$token) {
         Flight::halt(401, json_encode(["error" => "No autenticado"]));
         return;
     }
-    
+
     Auth::init();
     date_default_timezone_set('America/Mexico_City');
-    
-    $authData = Auth::verificarToken($token); // Verificar y decodificar el token
+
+    $authData = Auth::verificarToken($token);
 
     if (!$authData) {
         Flight::halt(401, json_encode(["error" => "Token inválido o expirado."]));
         return;
     }
-    $userId = $authData->data->id; // Obtener el ID del usuario desde el token
+
     $userRol = $authData->data->rol;
-    
-    if($userRol != 4){
-        Flight::halt(401, json_encode(["error" => "No tienes los permisos para realizar esta acción."]));
+
+    if ($userRol != 4) {
+        Flight::halt(403, json_encode([
+            "error" => "No tienes permisos para realizar esta acción."
+        ]));
         return;
     }
-    
+
     if (!preg_match('/^[0-9]+$/', $id_user)) {
-        Flight::halt(400, json_encode(["error" => "Id inválido"]));
+        Flight::halt(400, json_encode(["error" => "ID inválido"]));
         return;
     }
 
     try {
         $db = Flight::db();
         $db->beginTransaction();
-        
-        // Buscar usuario
-        $stmt = $db->prepare("SELECT id, email, user FROM users WHERE id = ?");
+
+        /* ------------------------------------
+           BUSCAR USUARIO
+        -------------------------------------*/
+        $stmt = $db->prepare("
+            SELECT id, email, user, verify, verify_expires_at
+            FROM users
+            WHERE id = ?
+            LIMIT 1
+        ");
         $stmt->execute([$id_user]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$user) {
             Flight::halt(404, json_encode(["error" => "Usuario no encontrado"]));
+            return;
         }
-    
-        // Verificar cuenta
-        $stmt = $db->prepare(
-            "UPDATE users SET verify = 1, verify_code = NULL WHERE id = ?"
-        );
-        $stmt->execute([$id_user]);
-    
-        // Generar códigos
+
+        /* ------------------------------------
+           YA VERIFICADO
+        -------------------------------------*/
+        if ($user['verify'] == 1) {
+            Flight::halt(400, json_encode([
+                "error" => "La cuenta ya se encuentra verificada."
+            ]));
+            return;
+        }
+
+        /* ------------------------------------
+           CUENTA EXPIRADA → ELIMINAR
+        -------------------------------------*/
+        if (
+            empty($user['verify_expires_at']) ||
+            strtotime($user['verify_expires_at']) < time()
+        ) {
+            $stmt = $db->prepare("DELETE FROM users WHERE id = ?");
+            $stmt->execute([$user['id']]);
+
+            $db->commit();
+
+            Flight::halt(400, json_encode([
+                "error" => "La cuenta estaba expirada y fue eliminada. El usuario debe registrarse nuevamente."
+            ]));
+            return;
+        }
+
+        /* ------------------------------------
+           FORZAR VERIFICACIÓN (ADMIN)
+        -------------------------------------*/
+        $stmt = $db->prepare("
+            UPDATE users
+            SET verify = 1,
+                verify_code = NULL,
+                verify_expires_at = NULL
+            WHERE id = ?
+        ");
+        $stmt->execute([$user['id']]);
+
+        /* ------------------------------------
+           GENERAR CÓDIGOS DE RECUPERACIÓN
+        -------------------------------------*/
         $codes = [
             generarCodigoRecuperacion(),
             generarCodigoRecuperacion(),
             generarCodigoRecuperacion()
         ];
-    
-        $stmt = $db->prepare(
-            "INSERT INTO recovery_user_codes (id_usuario, code_recovery, isUsed)
-             VALUES (?, ?, 0)"
-        );
-    
+
+        $stmt = $db->prepare("
+            INSERT INTO recovery_user_codes (id_usuario, code_recovery, isUsed)
+            VALUES (?, ?, 0)
+        ");
+
         foreach ($codes as $code) {
             $stmt->execute([$user['id'], $code]);
         }
-    
+
         $db->commit();
-    
-        // Enviar correo
+
+        /* ------------------------------------
+           VALIDAR EMAIL
+        -------------------------------------*/
+        $email = strtolower(trim($user['email']));
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            Flight::halt(400, json_encode(["error" => "Correo inválido"]));
+            return;
+        }
+
+        $domain = substr(strrchr($email, "@"), 1);
+        if (!checkdnsrr($domain, "MX")) {
+            Flight::halt(400, json_encode(["error" => "Dominio de correo inválido"]));
+            return;
+        }
+
+        /* ------------------------------------
+           ENVIAR EMAIL
+        -------------------------------------*/
         $mailToSend = sendEmail(
             "Códigos de recuperación para tu cuenta en DDSC: {$user['user']}",
             $user['user'],
-            "Tu cuenta se verificó correctamente",
-            "Estos códigos son de un solo uso, NO LOS COMPARTAS:\n1. {$codes[0]}\n2. {$codes[1]}\n3. {$codes[2]}",
+            "Tu cuenta fue verificada por un administrador",
+            "Estos códigos son de un solo uso, NO LOS COMPARTAS:\n\n"
+            . "1. {$codes[0]}\n"
+            . "2. {$codes[1]}\n"
+            . "3. {$codes[2]}",
             "Ir al sitio",
             getenv('URL_SITE'),
-            $user['email']
+            $email
         );
-    
+
         if (!$mailToSend) {
-            Flight::halt(500, json_encode(["error" => "No se pudo enviar el correo"]));
+            Flight::halt(500, json_encode([
+                "error" => "La cuenta fue verificada, pero no se pudo enviar el correo."
+            ]));
+            return;
         }
-    
+
         Flight::json([
-            "message" => "Cuenta verificada exitosamente. Códigos enviados al correo."
+            "message" => "Cuenta verificada correctamente por el administrador. Códigos enviados al correo."
         ]);
-    
+
     } catch (Exception $e) {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
+
         Flight::halt(500, json_encode([
-            "error" => "Error en el servidor: " . $e->getMessage()
+            "error" => "Error en el servidor."
         ]));
     }
-
 });
+
 
 Flight::route('PUT  /change-user-email/id/@id_user', function($id_user) {
     $req = Flight::request();
@@ -1365,119 +1500,181 @@ Flight::route('PUT /change-user-visibility/id/@id_user', function($id_user){
 });
 
 Flight::route('POST /register-user', function() {
-    
-    // Obtener los datos enviados desde el frontend
-    $request = json_decode(file_get_contents("php://input"), true);
 
-    // Validar que los datos requeridos estén presentes || !isset($request['token'])
-    if (!isset($request['user']) || !isset($request['password']) || !isset($request['email']) || !isset($request['country']) ) {
+    $request = json_decode(file_get_contents("php://input"), true);
+    date_default_timezone_set('America/Mexico_City');
+
+    if (
+        !isset($request['user']) ||
+        !isset($request['password']) ||
+        !isset($request['email']) ||
+        !isset($request['country'])
+    ) {
         Flight::halt(400, json_encode(["error" => "Faltan datos obligatorios."]));
         return;
     }
-    // $token = $request['token'];
-    $user = $request['user'];
+
+    $user     = trim($request['user']);
     $password = $request['password'];
-    $email = $request['email'];
-    $country = $request['country'];
-    $dominio = explode('@', $email)[1]; // Extrae el dominio
+    $email    = strtolower(trim($request['email']));
+    $country  = trim($request['country']);
 
-    if (!in_array($dominio, ['gmail.com', 'outlook.com', 'hotmail.com', 'traduction-club.live'])) {
-       Flight::halt(400, json_encode(["error" => "Correo electrónico no valido."]));
-        return;
-    }
-    /*
-    $response = file_get_contents("https://www.google.com/recaptcha/api/siteverify?secret=$secretKey&response=$token");
-    $responseData = json_decode($response, true);
-
-    if (!$responseData['success']) {
-        Flight::halt(400, json_encode(["error" => "Captcha incorrecto."]));
-    }
-    
-    */
-
-    // Validar que el usuario solo contenga letras y números
-    if (!preg_match('/^[a-zA-Z0-9_]+$/', $user)) {
-        Flight::halt(400, json_encode(["error" => "Nombre de usuario inválido"]));
-        return;
-    }
-    // Si es válido, se sanitiza
-    $user = filter_var($user, FILTER_SANITIZE_SPECIAL_CHARS);
-
-
-    // Validar que el usuario solo contenga letras y números
-    if (!preg_match('/^(?=.*[A-Za-z])(?=.*\d)(?=.*[_*#$%-])[A-Za-z\d_*#$%-]{8,12}$/', $password)) {
-        Flight::halt(400, json_encode(["error" => "La contraseña debe tener entre 8 a 12 caracteres, incluyendo letras, números, y puede contener al menos uno de los siguientes caracteres especiales _ * # $ % -."]));
-        return;
-    }
-
+    // Validar email
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         Flight::halt(400, json_encode(["error" => "Correo inválido"]));
         return;
     }
 
+    // Detectar dominios comunes mal escritos
+    $domain = explode('@', $email)[1];
+    $typos = [
+        'gmial.com'  => 'gmail.com',
+        'hotmial.com'=> 'hotmail.com',
+        'outlok.com' => 'outlook.com'
+    ];
 
-    // Validar que el usuario solo contenga letras y números
-    
+    if (isset($typos[$domain])) {
+        Flight::halt(400, json_encode([
+            "error" => "¿Quisiste decir {$typos[$domain]}?"
+        ]));
+        return;
+    }
+
+    // Dominios permitidos
+    if (!in_array($domain, ['gmail.com', 'outlook.com', 'hotmail.com', 'traduction-club.live'])) {
+        Flight::halt(400, json_encode(["error" => "Dominio de correo no permitido."]));
+        return;
+    }
+
+    // Validar usuario
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $user)) {
+        Flight::halt(400, json_encode(["error" => "Nombre de usuario inválido"]));
+        return;
+    }
+
+    // Validar contraseña
+    if (!preg_match('/^(?=.*[A-Za-z])(?=.*\d)(?=.*[_*#$%-])[A-Za-z\d_*#$%-]{8,12}$/', $password)) {
+        Flight::halt(400, json_encode([
+            "error" => "La contraseña debe tener entre 8 y 12 caracteres, letras, números y al menos un carácter especial (_ * # $ % -)."
+        ]));
+        return;
+    }
+
+    // Sanitizar
+    $user  = filter_var($user, FILTER_SANITIZE_SPECIAL_CHARS);
     $alias = $user;
 
-    $slug = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', str_replace(",", "",str_replace(".","",str_replace(" ", "-", strtolower(trim($alias))))));
+    $slug = iconv(
+        'UTF-8',
+        'ASCII//TRANSLIT//IGNORE',
+        str_replace(
+            [' ', ',', '.'],
+            ['-', '', ''],
+            strtolower(trim($alias))
+        )
+    );
 
-    // Hashear la contraseña antes de guardarla
-    $options = ['cost' => 10]; // Cost recomendado: 10-14
-    $hashedPassword = password_hash($password, PASSWORD_DEFAULT, $options);
+    // Hash password
+    $hashedPassword = password_hash($password, PASSWORD_DEFAULT, ['cost' => 10]);
 
     try {
-        // Conectar a la base de datos
         $db = Flight::db();
-        
-        // Verificar si el usuario ya existe
-        $stmt = $db->prepare("SELECT id FROM users WHERE email = ?");
+
+        /* -----------------------------
+           VALIDAR EMAIL EXISTENTE
+        ------------------------------*/
+        $stmt = $db->prepare("
+            SELECT id, verify, verify_expires_at
+            FROM users
+            WHERE email = ?
+        ");
         $stmt->execute([$email]);
-        if ($stmt->fetch()) {
-            Flight::halt(400, json_encode(["error" => "El correo electrónico ya existe."]));
-            return;
+        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($existing) {
+            if ($existing['verify'] == 1) {
+                Flight::halt(400, json_encode(["error" => "El correo ya está verificado."]));
+                return;
+            }
+
+            // Si está expirado → eliminar
+            if (strtotime($existing['verify_expires_at']) < time()) {
+                $stmt = $db->prepare("DELETE FROM users WHERE id = ?");
+                $stmt->execute([$existing['id']]);
+            } else {
+                Flight::halt(400, json_encode([
+                    "error" => "Este correo ya fue registrado pero no verificado. Revisa tu email o solicita un seguimiento especial."
+                ]));
+                return;
+            }
         }
 
+        /* -----------------------------
+           VALIDAR USUARIO EXISTENTE
+        ------------------------------*/
         $stmt = $db->prepare("SELECT id FROM users WHERE user = ?");
         $stmt->execute([$user]);
         if ($stmt->fetch()) {
-            Flight::halt(400, json_encode(["error" => "No es posible guardar el nombre de usuario debido a un registro previo."]));
+            Flight::halt(400, json_encode([
+                "error" => "El nombre de usuario ya existe."
+            ]));
             return;
         }
 
-        $codigoVerificacion = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT); // Código de 6 dígitos
+        /* -----------------------------
+           CREAR USUARIO PENDIENTE
+        ------------------------------*/
+        $verificationCode = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
+        $expiresAt = date('Y-m-d H:i:s', strtotime('+24 hours'));
 
-        // Insertar el usuario en la base de datos
-        $stmt = $db->prepare("INSERT INTO users (user, user_password,alias, slug, country, email, verify, verify_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$user, $hashedPassword,  $alias,$slug, $country, $email, 0, $codigoVerificacion]);
+        $stmt = $db->prepare("
+            INSERT INTO users
+            (user, user_password, alias, slug, country, email, verify, verify_code, verify_expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+        ");
 
-        // Responder con éxito
-        // mail($email, "Tu código de verificación", "Tu código es: $codigoVerificacion");
-        $site_url = getenv('URL_SITE');
-        try{
-            $mailToSend = sendEmail("Confirma tu cuenta DDSC, {$user}!",
+        $stmt->execute([
             $user,
-            "Verifica tu Cuenta",
-            "Para acceder a tu cuenta de Doki Doki Spanish Club, es necesario verificar tu cuenta con el siguiente enlace.",
+            $hashedPassword,
+            $alias,
+            $slug,
+            $country,
+            $email,
+            $verificationCode,
+            $expiresAt
+        ]);
+
+        /* -----------------------------
+           ENVIAR EMAIL
+        ------------------------------*/
+        $site_url = getenv('URL_SITE');
+
+        $sent = sendEmail(
+            "Confirma tu cuenta DDSC, {$user}!",
+            $user,
+            "Verifica tu cuenta",
+            "Para acceder a tu cuenta, confirma tu correo desde el siguiente enlace.",
             "Verificar Cuenta",
-            "{$site_url}/verificar?email={$email}&code={$codigoVerificacion}",
+            "{$site_url}/verificar?email={$email}&code={$verificationCode}",
             $email
         );
-            if($mailToSend){
-                Flight::json(["message" => "Usuario registrado. Ingresa a tu correo para verificar y acceder la cuenta."]);
-            }else{
-                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " ]));
-            return;
-            }
-        }catch(Exception $e){
-            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: " ]));
+
+        if (!$sent) {
+            Flight::halt(500, json_encode(["error" => "No se pudo enviar el correo de verificación."]));
             return;
         }
+
+        Flight::json([
+            "message" => "Usuario registrado correctamente. Revisa tu correo para verificar la cuenta."
+        ]);
+
     } catch (Exception $e) {
-        Flight::halt(500, json_encode(["error" => "Error en el servidor: " . $e->getMessage()]));
-        return;
+        Flight::halt(500, json_encode([
+            "error" => "Error del servidor."
+        ]));
     }
 });
+
 
 Flight::route('POST /update-photo-team/@id_team', function($id_team) {
     $req = Flight::request();
