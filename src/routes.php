@@ -1667,7 +1667,7 @@ Flight::route('POST /register-user', function() {
         }
 
         Flight::json([
-            "message" => "Usuario registrado correctamente. Revisa tu correo para verificar la cuenta."
+            "message" => "Usuario registrado correctamente. Revisa tu correo para verificar la cuenta en un máximo de 24 Horas y evitar su eliminación."
         ]);
 
     } catch (Exception $e) {
