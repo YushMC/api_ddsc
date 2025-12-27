@@ -1090,6 +1090,7 @@ Flight::route('PUT /verify-user/id/@id_user', function ($id_user) {
         /* ------------------------------------
            CUENTA EXPIRADA → ELIMINAR
         -------------------------------------*/
+        /*
         if (
             empty($user['verify_expires_at']) ||
             strtotime($user['verify_expires_at']) < time()
@@ -1104,6 +1105,7 @@ Flight::route('PUT /verify-user/id/@id_user', function ($id_user) {
             ]));
             return;
         }
+            */
 
         /* ------------------------------------
            FORZAR VERIFICACIÓN (ADMIN)
