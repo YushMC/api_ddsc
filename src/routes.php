@@ -992,68 +992,69 @@ Flight::route('PUT  /verify-user/id/@id_user', function($id_user) {
 
     try {
         $db = Flight::db();
+        $db->beginTransaction();
         
-        // Buscar usuario con ese código y email
-        $stmt = $db->prepare("SELECT * FROM users WHERE id = ? AND verify = 1");
+        // Buscar usuario
+        $stmt = $db->prepare("SELECT id, email, user FROM users WHERE id = ?");
         $stmt->execute([$id_user]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($user) {
-            Flight::halt(400, json_encode(["error" => "Accion inválida ya esta verificado."]));
-            return;
+        
+        if (!$user) {
+            Flight::halt(404, json_encode(["error" => "Usuario no encontrado"]));
         }
-
-        // Marcar la cuenta como verificada
-        $stmt = $db->prepare("UPDATE users SET verify = 1, verify_code = NULL WHERE id = ?");
+    
+        // Verificar cuenta
+        $stmt = $db->prepare(
+            "UPDATE users SET verify = 1, verify_code = NULL WHERE id = ?"
+        );
         $stmt->execute([$id_user]);
-        
-        
-        $stmt = $db->prepare("SELECT * FROM users WHERE id = ?");
-        $stmt->execute([$id_user]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        $emailUser = $user['email'];
-        $idUser = $user['id'];
-        $nameUser = $user['user'];
-        
-        $code1 = generarCodigoRecuperacion();
-        $code2 = generarCodigoRecuperacion();
-        $code3 = generarCodigoRecuperacion();
-        
-        $stmt2 = $db->prepare("INSERT INTO recovery_user_codes (id_usuario, code_recovery, isUsed) VALUES (?, ?, ?)");
-        $stmt2->execute([$idUser, $code1, 0]);
-        
-        $stmt3 = $db->prepare("INSERT INTO recovery_user_codes (id_usuario, code_recovery, isUsed) VALUES (?, ?, ?)");
-        $stmt3->execute([$idUser, $code2, 0]);
-        
-        $stmt4 = $db->prepare("INSERT INTO recovery_user_codes (id_usuario, code_recovery, isUsed) VALUES (?, ?, ?)");
-        $stmt4->execute([$idUser, $code3, 0]);
-        
-        try{
-            $usuarioMail=$user['user'];
-            $mailToSend = sendEmail("Codigos de recuperacion para tu cuenta en DDSC: {$nameUser}!",
-            $nameUser,
+    
+        // Generar códigos
+        $codes = [
+            generarCodigoRecuperacion(),
+            generarCodigoRecuperacion(),
+            generarCodigoRecuperacion()
+        ];
+    
+        $stmt = $db->prepare(
+            "INSERT INTO recovery_user_codes (id_usuario, code_recovery, isUsed)
+             VALUES (?, ?, 0)"
+        );
+    
+        foreach ($codes as $code) {
+            $stmt->execute([$user['id'], $code]);
+        }
+    
+        $db->commit();
+    
+        // Enviar correo
+        $mailToSend = sendEmail(
+            "Códigos de recuperación para tu cuenta en DDSC: {$user['user']}",
+            $user['user'],
             "Tu cuenta se verificó correctamente",
-            "los siguientes códigos de recuperación son de solo un uso, NO LOS COMPARTAS CON NADIE!. 1. {$code1} 2. {$code2} 3. {$code3}",
+            "Estos códigos son de un solo uso, NO LOS COMPARTAS:\n1. {$codes[0]}\n2. {$codes[1]}\n3. {$codes[2]}",
             "Ir al sitio",
             getenv('URL_SITE'),
-            $usuarioMail
+            $user['email']
         );
-            
-            if($mailToSend){
-                Flight::json(["message" => "Cuenta verificada exitosamente. Se han enviado los codigos de recuperación al correo del usuario."]);
-            }else{
-                Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
-                return;
-            }
-        }catch(Exception $e){
-            Flight::halt(500, json_encode(["error" => "Error al enviar el correo: "]));
-            return;
+    
+        if (!$mailToSend) {
+            Flight::halt(500, json_encode(["error" => "No se pudo enviar el correo"]));
         }
+    
+        Flight::json([
+            "message" => "Cuenta verificada exitosamente. Códigos enviados al correo."
+        ]);
+    
     } catch (Exception $e) {
-        Flight::halt(500, json_encode(["error" => "Error en el servidor: " . $e->getMessage()]));
-        return;
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        Flight::halt(500, json_encode([
+            "error" => "Error en el servidor: " . $e->getMessage()
+        ]));
     }
+
 });
 
 Flight::route('PUT  /change-user-email/id/@id_user', function($id_user) {
