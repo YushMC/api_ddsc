@@ -867,7 +867,6 @@ Flight::route('GET /mod/@slug', function($slug) {
                 u3.id AS porteador_id,
                 u3.alias AS porteador_alias,
                 u3.user AS porteador_nombre,
-                u3.email AS porteador_correo,
                 u3.url_logo AS porteador_avatar,
                 IFNULL(GROUP_CONCAT(DISTINCT g.genero ORDER BY g.genero SEPARATOR ', '), '') AS generos,
 
@@ -938,7 +937,6 @@ Flight::route('GET /mod/@slug', function($slug) {
             $mod['porteador_id'],
             $mod['porteador_alias'],
             $mod['porteador_nombre'],
-            $mod['porteador_correo'],
             $mod['porteador_avatar']
         );
     }
