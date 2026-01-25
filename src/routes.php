@@ -2906,15 +2906,30 @@ Flight::route('POST /create-comment', function() {
     $db = Flight::db();
     $data = Flight::request()->data;
     
-    if (!preg_match('/^[\p{L}\p{N}\p{P}\p{Zs}\n\r]{10,200}$/u', $data['comment'])) {
-        Flight::halt(400, json_encode(["error" => "El comentario no es válido. Debe tener entre 10 y 200 caracteres y solo caracteres permitidos."]));
-        return;
+    $comment= $data['comment'];
+
+    if (mb_strlen($comment) < 10 || mb_strlen($comment) > 200) {
+        Flight::halt(400, json_encode([
+            "error" => "El comentario debe tener entre 10 y 200 caracteres."
+        ]));
+    }
+
+    if (preg_match('/<[^>]*>/', $comment)) {
+        Flight::halt(400, json_encode([
+            "error" => "El comentario no puede contener HTML."
+        ]));
+    }
+
+    $stars = isset($data['stars']) ? (int)$data['stars'] : 1;
+
+    if ($stars < 1 || $stars > 5) {
+        Flight::halt(400, json_encode(["error" => "Las estrellas deben estar entre 1 y 5"]));
     }
     
     $stmtMods = $db->prepare("SELECT * FROM puntuation WHERE id_mod = :idMod AND id_user = :id_user");
     $stmtMods->execute([':idMod' => $data['id_mod'], ":id_user"=>$userId]);
     if($stmtMods->fetch()){
-        Flight::halt(401, json_encode(["error" => "Ya existe una valoración a este mod"]));
+        Flight::halt(403, json_encode(["error" => "Ya existe una valoración a este mod"]));
         return;
     }
 
@@ -2922,12 +2937,14 @@ Flight::route('POST /create-comment', function() {
     $result = $stmt->execute([
         ':id_user' => $userId,
         ':id_mod' => $data['id_mod'],
-        ':contenido' => $data['comment'],
-        ':stars' => isset($data['stars']) ? $data['stars'] : 1
+        ':contenido' => $comment,
+        ':stars' => $stars
     ]);
 
     if (!$result) {
-        die(json_encode(['error' => 'No se pudo guardar el comentario', 'debug' => $stmt->errorInfo()]));
+        Flight::halt(500, json_encode([
+            'error' => 'No se pudo actualizar el comentario'
+        ]));
     }
 
     $stmtMods = $db->prepare("SELECT * FROM mods WHERE id = :idMod");
@@ -2959,6 +2976,76 @@ Flight::route('POST /create-comment', function() {
     Flight::json([
         "response" => "success",
         "message" =>"Valoración guardada correctamente."
+    ]);
+});
+
+Flight::route('POST /update-comment', function() {
+    $req = Flight::request();
+
+    // Leer el token directamente del header Authorization
+    $token = $req->getHeader('Authorization');
+    
+    if (!$token) {
+        Flight::halt(401, json_encode(["error" => "No autenticado"]));
+        return;
+    }
+    
+    Auth::init();
+
+    $authData = Auth::verificarToken($token);
+    if (!$authData) {
+        Flight::halt(401, json_encode(["error" => "Token inválido o expirado, vuelve a iniciar sesión."]));
+        return;
+    }
+
+    $userId = $authData->data->id;
+    $db = Flight::db();
+    $data = Flight::request()->data;
+    $comment= $data['comment'];
+
+    if (mb_strlen($comment) < 10 || mb_strlen($comment) > 200) {
+        Flight::halt(400, json_encode([
+            "error" => "El comentario debe tener entre 10 y 200 caracteres."
+        ]));
+    }
+
+    if (preg_match('/<[^>]*>/', $comment)) {
+        Flight::halt(400, json_encode([
+            "error" => "El comentario no puede contener HTML."
+        ]));
+    }
+
+    $stars = isset($data['stars']) ? (int)$data['stars'] : 1;
+
+    if ($stars < 1 || $stars > 5) {
+        Flight::halt(400, json_encode(["error" => "Las estrellas deben estar entre 1 y 5"]));
+    }
+    
+    $stmtMods = $db->prepare("SELECT * FROM puntuation WHERE id_mod = :idMod AND id_user = :id_user");
+    $stmtMods->execute([':idMod' => $data['id_mod'], ":id_user"=>$userId]);
+    $dataComment = $stmtMods->fetch();
+
+    if(!$dataComment){
+        Flight::halt(403, json_encode(["error" => "No existe una valoración a este mod"]));
+        return;
+    }
+
+    $stmt = $db->prepare("UPDATE puntuation set comment = :contenido, stars = :stars WHERE id= :id");
+    $result = $stmt->execute([
+        ':id' => $dataComment['id'],
+        ':contenido' => $data['comment'],
+        ':stars' => $stars
+    ]);
+
+    if (!$result) {
+        Flight::halt(500, json_encode([
+            'error' => 'No se pudo actualizar el comentario'
+        ]));
+    }
+
+    Flight::json([
+        "response" => "success",
+        "message" =>"Valoración actualizada correctamente."
     ]);
 });
 
